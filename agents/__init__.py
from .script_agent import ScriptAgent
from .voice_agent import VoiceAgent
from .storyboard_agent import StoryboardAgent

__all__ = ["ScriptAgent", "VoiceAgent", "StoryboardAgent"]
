@@ -1,0 +1,84 @@
+"""Agent de storyboard pour planifier les scènes d'une vidéo."""
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, List
+
+
+class StoryboardAgent:
+    """Crée une séquence de scènes visuelles à partir d'un script."""
+
+    def __init__(self):
+        self.default_styles = {
+            "cinematic": "style cinématographique, lumière dramatique, plan large",
+            "social": "style social media, dynamique, vertical, très visuel",
+            "corporate": "style corporate, propre, premium, présentation professionnelle",
+        }
+
+    def generate(self, script: Dict[str, Any], style: str = "cinematic") -> List[Dict[str, Any]]:
+        """Créer le storyboard à partir d'un script."""
+        scenes = script.get("scenes", [])
+        if not scenes:
+            raise ValueError("Le script ne contient pas de scènes.")
+
+        storyboard = []
+        visual_style = self.default_styles.get(style, self.default_styles["cinematic"])
+
+        for index, scene in enumerate(scenes, start=1):
+            storyboard.append(
+                {
+                    "scene_number": index,
+                    "title": scene.get("title", f"Scène {index}"),
+                    "duration": scene.get("duration", 5),
+                    "visual_description": self._build_visual(scene, index, visual_style),
+                    "narration": scene.get("narration", ""),
+                    "camera": self._pick_camera(index),
+                    "text_overlay": self._build_overlay(scene, index),
+                }
+            )
+
+        return storyboard
+
+    def _build_visual(self, scene: Dict[str, Any], index: int, style: str) -> str:
+        scene_name = scene.get("title", f"Scène {index}")
+        visual = scene.get("visual", "" )
+        return (
+            f"{scene_name} : {visual} — {style}, composition dynamique, "
+            "composition équilibrée, couleurs soignées, rendu visuel attractif."
+        )
+
+    def _pick_camera(self, index: int) -> str:
+        camera_moves = [
+            "plan large",
+            "gros plan",
+            "travelling latéral",
+            "plan moyen",
+            "plan rapproché",
+            "plan final",
+        ]
+        return camera_moves[(index - 1) % len(camera_moves)]
+
+    def _build_overlay(self, scene: Dict[str, Any], index: int) -> str:
+        title = scene.get("title", f"Scène {index}")
+        return f"{title}"
+
+
+if __name__ == "__main__":
+    agent = StoryboardAgent()
+    script = {
+        "scenes": [
+            {
+                "title": "Introduction",
+                "visual": "une entreprise qui investit dans l'IA",
+                "narration": "L'IA permet d'optimiser les processus business.",
+                "duration": 8,
+            },
+            {
+                "title": "Bénéfices",
+                "visual": "des chiffres et des résultats concrets",
+                "narration": "Les PME gagnent du temps et améliorent leur productivité.",
+                "duration": 10,
+            },
+        ]
+    }
+    print(json.dumps(agent.generate(script, style="cinematic"), ensure_ascii=False, indent=2))
