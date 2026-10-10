@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VideoAgent Studio</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: #111b2d;
+      --panel-2: #162743;
+      --primary: #6ea8fe;
+      --accent: #8ef0c7;
+      --text: #edf4ff;
+      --muted: #b6c4de;
+      --danger: #ff7d7d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #08111f, #101d30 40%, #1b2540);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .container {
+      width: min(1100px, 100%);
+      background: rgba(17, 27, 45, 0.9);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 28px 32px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 42px);
+      letter-spacing: 0.5px;
+    }
+
+    .header p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 0;
+    }
+
+    .panel {
+      padding: 32px;
+    }
+
+    .panel + .panel {
+      border-left: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    textarea,
+    select,
+    input,
+    button {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      font-size: 16px;
+      padding: 14px 16px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .row .field { margin: 0; }
+
+    button {
+      margin-top: 22px;
+      background: linear-gradient(135deg, var(--primary), #4d7af2);
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 10px 25px rgba(110, 168, 254, 0.3);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px rgba(110, 168, 254, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
+    .result {
+      margin-top: 24px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 16px;
+      min-height: 180px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .status {
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--accent);
+      min-height: 22px;
+    }
+
+    .error {
+      color: var(--danger);
+    }
+
+    .output-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .panel + .panel {
+        border-left: none;
+        border-top: 1px solid rgba(255,255,255,0.08);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>VideoAgent Studio</h1>
+      <p>Générateur de vidéo IA : prompt → script → voix → vidéo</p>
+    </div>
+
+    <div class="content">
+      <section class="panel">
+        <form id="videoForm">
+          <label for="prompt">Sujet de la vidéo</label>
+          <textarea id="prompt" placeholder="Exemple : Crée une vidéo de 30 secondes sur l’IA pour les PME, en style cinématographique." required></textarea>
+
+          <div class="row">
+            <div class="field">
+              <label for="duration">Durée (secondes)</label>
+              <input id="duration" type="number" min="10" max="180" value="30" />
+            </div>
+            <div class="field">
+              <label for="style">Style</label>
+              <select id="style">
+                <option value="cinematic">Cinematic</option>
+                <option value="social">Social</option>
+                <option value="corporate">Corporate</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="language">Langue</label>
+              <select id="language">
+                <option value="fr">Français</option>
+                <option value="en">Anglais</option>
+                <option value="es">Espagnol</option>
+                <option value="de">Allemand</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="output_name">Nom du fichier</label>
+              <input id="output_name" type="text" value="demo_video" />
+            </div>
+          </div>
+
+          <button id="submitBtn" type="submit">Générer la vidéo</button>
+        </form>
+
+        <div id="status" class="status"></div>
+      </section>
+
+      <aside class="panel">
+        <h2>Résultat</h2>
+        <div class="result" id="resultBox">
+          <pre>Le résultat apparaîtra ici après la génération.</pre>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('videoForm');
+    const statusBox = document.getElementById('status');
+    const resultBox = document.getElementById('resultBox');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const prompt = document.getElementById('prompt').value.trim();
+      const duration = Number(document.getElementById('duration').value || 30);
+      const style = document.getElementById('style').value;
+      const language = document.getElementById('language').value;
+      const output_name = document.getElementById('output_name').value.trim() || 'demo_video';
+
+      if (!prompt) {
+        statusBox.textContent = 'Le sujet de la vidéo est obligatoire.';
+        statusBox.classList.add('error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusBox.textContent = 'Génération en cours...';
+      statusBox.classList.remove('error');
+      resultBox.innerHTML = '<pre>Traitement du prompt...</pre>';
+
+      try {
+        const response = await fetch('http://localhost:8000/api/generate-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            duration,
+            style,
+            language,
+            output_name,
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || 'Erreur inconnue');
+        }
+
+        const rendered = {
+          title: data.title,
+          summary: data.summary,
+          video_path: data.video_path,
+          voice_path: data.voice_path,
+          storyboard: data.storyboard || []
+        };
+
+        const preview = [
+          `Titre : ${rendered.title}`,
+          ``,
+          `Résumé : ${rendered.summary}`,
+          ``,
+          `Voix : ${rendered.voice_path || 'non disponible'}`,
+          `Vidéo : ${rendered.video_path || 'non disponible'}`,
+          ``,
+          `Storyboard :`,
+          ...rendered.storyboard.slice(0, 4).map((scene, index) =>
+            `- ${index + 1}. ${scene.title} (${scene.duration_sec}s) | ${scene.camera}`
+          )
+        ].join('\n');
+
+        resultBox.innerHTML = `<pre>${escapeHtml(preview)}</pre>`;
+
+        if (rendered.video_path) {
+          const link = document.createElement('a');
+          link.href = `http://localhost:8000/${rendered.video_path.replace(/\\/g, '/')}`;
+          link.className = 'output-link';
+          link.target = '_blank';
+          link.textContent = 'Ouvrir la vidéo générée';
+          resultBox.appendChild(link);
+        }
+
+        statusBox.textContent = 'Vidéo générée avec succès.';
+      } catch (error) {
+        statusBox.textContent = error.message || 'Erreur pendant la génération.';
+        statusBox.classList.add('error');
+        resultBox.innerHTML = `<pre>${escapeHtml(error.message || 'Erreur inconnue')}</pre>`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
