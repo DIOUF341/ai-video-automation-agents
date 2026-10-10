@@ -1,0 +1,100 @@
+"""Module de montage vidéo basé sur FFmpeg pour générer un MP4 final."""
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+class VideoRenderer:
+    """Rend une vidéo simple à partir de scènes visuelles et d'une voix off."""
+
+    def __init__(self, output_dir: str = "output"):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def render(
+        self,
+        audio_path: str,
+        output_name: str = "final_video",
+        duration: int = 30,
+        image_sequence: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """Créer une vidéo MP4 à partir de l'audio et éventuellement d'images."""
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Le fichier audio est introuvable : {audio_path}")
+
+        final_name = self._sanitize_name(output_name)
+        output_mp4 = self.output_dir / f"{final_name}.mp4"
+
+        if image_sequence:
+            # Rend une vidéo très simple en créant une séquence d'images avec FFmpeg.
+            # Si aucun image n'est réellement disponible, on garde un fallback sécuritaire.
+            temp_dir = self.output_dir / "tmp_frames"
+            temp_dir.mkdir(exist_ok=True)
+
+            for index, image in enumerate(image_sequence[:10], start=1):
+                if os.path.exists(image):
+                    target = temp_dir / f"frame_{index:03d}.png"
+                    # Copie la vraie image si elle existe
+                    subprocess.run(["cp", image, str(target)], check=False)
+
+            frame_pattern = str(temp_dir / "frame_%03d.png")
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-framerate", "1",
+                "-i", frame_pattern,
+                "-i", audio_path,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-shortest",
+                str(output_mp4),
+            ]
+        else:
+            # Cas minimal : créer une vidéo noire de durée donnée pour sécuriser le rendu.
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-f", "lavfi",
+                "-i", "color=c=black:s=1280x720:d=1",
+                "-i", audio_path,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-shortest",
+                str(output_mp4),
+            ]
+
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except FileNotFoundError as exc:
+            raise RuntimeError("FFmpeg n'est pas installé ou n'est pas disponible dans le PATH.") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"FFmpeg a échoué : {exc.stderr or exc.stdout or 'Erreur inconnue'}") from exc
+
+        return {
+            "output_path": str(output_mp4),
+            "file_name": f"{final_name}.mp4",
+            "duration": duration,
+            "size_bytes": output_mp4.stat().st_size,
+        }
+
+    @staticmethod
+    def _sanitize_name(value: str) -> str:
+        safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value.strip().lower())
+        return safe or "final_video"
+
+
+if __name__ == "__main__":
+    renderer = VideoRenderer(output_dir="output")
+    result = renderer.render(
+        audio_path="output/demo_voice.mp3",
+        output_name="demo_video",
+        duration=30,
+    )
+    print(result)
