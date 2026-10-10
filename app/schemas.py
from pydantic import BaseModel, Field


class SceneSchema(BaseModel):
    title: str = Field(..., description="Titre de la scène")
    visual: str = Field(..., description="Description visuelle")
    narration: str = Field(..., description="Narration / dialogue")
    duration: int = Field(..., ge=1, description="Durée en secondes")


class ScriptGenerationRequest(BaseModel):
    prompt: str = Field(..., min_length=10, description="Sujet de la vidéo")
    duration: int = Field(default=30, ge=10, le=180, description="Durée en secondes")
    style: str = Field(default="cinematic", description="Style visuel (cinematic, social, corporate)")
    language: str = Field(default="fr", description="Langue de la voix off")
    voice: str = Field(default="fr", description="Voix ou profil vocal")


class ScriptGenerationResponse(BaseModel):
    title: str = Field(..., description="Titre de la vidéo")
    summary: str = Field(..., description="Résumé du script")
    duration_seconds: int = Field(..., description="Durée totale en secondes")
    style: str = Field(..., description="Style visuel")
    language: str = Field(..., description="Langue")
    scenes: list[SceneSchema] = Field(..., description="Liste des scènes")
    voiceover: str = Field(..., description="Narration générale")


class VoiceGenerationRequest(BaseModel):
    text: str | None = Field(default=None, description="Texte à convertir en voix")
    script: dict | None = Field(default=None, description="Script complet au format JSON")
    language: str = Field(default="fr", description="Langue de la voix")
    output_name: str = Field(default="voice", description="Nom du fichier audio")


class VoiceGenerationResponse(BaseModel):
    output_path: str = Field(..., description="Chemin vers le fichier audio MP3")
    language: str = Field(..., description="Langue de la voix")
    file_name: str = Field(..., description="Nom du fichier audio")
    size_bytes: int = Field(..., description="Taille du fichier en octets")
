@@ -1,0 +1,93 @@
+"""Agent IA pour générer la voix off d'une vidéo."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any, Dict
+
+from gtts import gTTS
+
+
+class VoiceAgent:
+    """Agent de synthèse vocale basé sur gTTS."""
+
+    def __init__(self, output_dir: str = "output"):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def generate(
+        self,
+        text: str,
+        language: str = "fr",
+        output_name: str = "voice",
+    ) -> Dict[str, Any]:
+        """Générer un fichier audio MP3 à partir d'un texte."""
+        normalized_text = text.strip()
+        if not normalized_text:
+            raise ValueError("Le texte de narration est vide.")
+
+        safe_lang = self._normalize_language(language)
+        safe_name = self._sanitize_name(output_name)
+        output_path = self.output_dir / f"{safe_name}.mp3"
+
+        tts = gTTS(text=normalized_text, lang=safe_lang, slow=False)
+        tts.save(str(output_path))
+
+        return {
+            "output_path": str(output_path),
+            "language": safe_lang,
+            "file_name": f"{safe_name}.mp3",
+            "size_bytes": output_path.stat().st_size,
+        }
+
+    def generate_from_script(
+        self,
+        script: Dict[str, Any],
+        output_name: str | None = None,
+        language: str | None = None,
+    ) -> Dict[str, Any]:
+        """Créer la voix off à partir d'un script complet."""
+        text = script.get("voiceover") or " ".join(
+            scene.get("narration", "") for scene in script.get("scenes", [])
+        )
+        return self.generate(
+            text=text,
+            language=language or script.get("language") or "fr",
+            output_name=output_name or script.get("title") or "voice",
+        )
+
+    @staticmethod
+    def _normalize_language(language: str) -> str:
+        mapping = {
+            "fr": "fr",
+            "fr-fr": "fr",
+            "french": "fr",
+            "en": "en",
+            "en-us": "en",
+            "english": "en",
+            "es": "es",
+            "es-es": "es",
+            "spanish": "es",
+            "de": "de",
+            "de-de": "de",
+            "german": "de",
+        }
+        key = (language or "fr").lower().strip()
+        return mapping.get(key, "fr")
+
+    @staticmethod
+    def _sanitize_name(value: str) -> str:
+        clean = value.strip().lower()
+        clean = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in clean)
+        clean = clean.strip("_")
+        return clean or "voice"
+
+
+if __name__ == "__main__":
+    agent = VoiceAgent(output_dir="output")
+    result = agent.generate(
+        text="Bienvenue dans cette vidéo sur l'intelligence artificielle pour les PME.",
+        language="fr",
+        output_name="demo_voice",
+    )
+    print(result)
