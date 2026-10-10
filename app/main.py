@@ -1,12 +1,22 @@
 """API FastAPI principale."""
 import json
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 
-from app.config import settings
-from app.schemas import ScriptGenerationRequest, ScriptGenerationResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from agents.script_agent import ScriptAgent
+from agents.storyboard_agent import StoryboardAgent
+from agents.voice_agent import VoiceAgent
+from agents.video_renderer import VideoRenderer
+from app.config import settings
+from app.schemas import (
+    ScriptGenerationRequest,
+    ScriptGenerationResponse,
+    VideoGenerationRequest,
+    VideoGenerationResponse,
+)
 
 app = FastAPI(
     title=settings.app_name,
@@ -14,7 +24,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Activer CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +35,6 @@ app.add_middleware(
 
 @app.get("/")
 def read_root() -> dict:
-    """Endpoint racine."""
     return {
         "status": "ok",
         "app": settings.app_name,
@@ -37,31 +45,13 @@ def read_root() -> dict:
 
 @app.get("/health")
 def health_check() -> dict:
-    """Vérifier l'état du service."""
-    return {
-        "status": "healthy",
-        "service": settings.app_name,
-    }
+    return {"status": "healthy", "service": settings.app_name}
 
 
 @app.post("/api/generate-script", response_model=ScriptGenerationResponse)
 def generate_script(payload: ScriptGenerationRequest) -> ScriptGenerationResponse:
-    """Générer un script vidéo à partir d'un prompt.
-    
-    Args:
-        payload: Requête de génération contenant prompt, durée, style, langue
-        
-    Returns:
-        Script structuré avec scènes et narration
-        
-    Raises:
-        HTTPException: En cas d'erreur lors de la génération
-    """
     try:
-        agent = ScriptAgent(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model,
-        )
+        agent = ScriptAgent(api_key=settings.openai_api_key, model=settings.openai_model)
         script = agent.generate(
             prompt=payload.prompt,
             duration=payload.duration,
@@ -77,13 +67,54 @@ def generate_script(payload: ScriptGenerationRequest) -> ScriptGenerationRespons
         raise HTTPException(status_code=500, detail=f"Erreur interne: {str(e)}")
 
 
+@app.post("/api/generate-video", response_model=VideoGenerationResponse)
+def generate_video(payload: VideoGenerationRequest) -> VideoGenerationResponse:
+    try:
+        output_dir = Path(settings.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        script_agent = ScriptAgent(api_key=settings.openai_api_key, model=settings.openai_model)
+        script = script_agent.generate(
+            prompt=payload.prompt,
+            duration=payload.duration,
+            style=payload.style,
+            language=payload.language,
+        )
+
+        storyboard_agent = StoryboardAgent()
+        storyboard = storyboard_agent.build_storyboard(payload.prompt, script, style=payload.style)
+
+        voice_agent = VoiceAgent()
+        voice_path = voice_agent.generate_voice(
+            text=script.get("voiceover", payload.prompt),
+            output_name=payload.output_name,
+            language=payload.language,
+            output_dir=str(output_dir),
+        )
+
+        video_renderer = VideoRenderer(output_dir=str(output_dir))
+        render_result = video_renderer.render(
+            audio_path=voice_path,
+            output_name=payload.output_name,
+            duration=payload.duration,
+            image_sequence=[],
+        )
+
+        return VideoGenerationResponse(
+            title=script.get("title", "Vidéo IA"),
+            summary=script.get("summary", payload.prompt),
+            script_path=str(output_dir / f"{payload.output_name}_script.json"),
+            voice_path=voice_path,
+            video_path=render_result.get("output_path"),
+            storyboard=storyboard.get("scenes", []),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {str(e)}")
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(_, exc: Exception):
-    """Gestionnaire global d'exceptions."""
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc), "error_type": type(exc).__name__},
-    )
+    return JSONResponse(status_code=500, content={"detail": str(exc), "error_type": type(exc).__name__})
 
 
 if __name__ == "__main__":
