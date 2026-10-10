@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from agents.image_generator import ImageGenerator
 from agents.script_agent import ScriptAgent
 from agents.storyboard_agent import StoryboardAgent
 from agents.voice_agent import VoiceAgent
@@ -21,7 +22,7 @@ from app.schemas import (
 app = FastAPI(
     title=settings.app_name,
     description="Plateforme d'automatisation de création de vidéos assistée par IA",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -38,8 +39,8 @@ def read_root() -> dict:
     return {
         "status": "ok",
         "app": settings.app_name,
-        "message": "Le générateur de script IA est prêt.",
-        "version": "0.1.0",
+        "message": "Le générateur de vidéo IA est prêt. Utilisez /docs pour la documentation.",
+        "version": "0.2.0",
     }
 
 
@@ -72,7 +73,10 @@ def generate_video(payload: VideoGenerationRequest) -> VideoGenerationResponse:
     try:
         output_dir = Path(settings.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        project_dir = output_dir / payload.output_name
+        project_dir.mkdir(parents=True, exist_ok=True)
 
+        # 1. Générer le script
         script_agent = ScriptAgent(api_key=settings.openai_api_key, model=settings.openai_model)
         script = script_agent.generate(
             prompt=payload.prompt,
@@ -81,29 +85,45 @@ def generate_video(payload: VideoGenerationRequest) -> VideoGenerationResponse:
             language=payload.language,
         )
 
+        # 2. Générer le storyboard
         storyboard_agent = StoryboardAgent()
         storyboard = storyboard_agent.build_storyboard(payload.prompt, script, style=payload.style)
 
+        # 3. Générer les images pour chaque scène
+        image_generator = ImageGenerator(
+            output_dir=str(project_dir),
+            api_key=settings.replicate_api_key,
+            provider="replicate",
+        )
+        image_results = image_generator.generate_for_storyboard(
+            storyboard=storyboard.get("scenes", []),
+            output_prefix="scene",
+        )
+        image_paths = [r["image_path"] for r in image_results if r.get("image_path")]
+
+        # 4. Générer la voix off
         voice_agent = VoiceAgent()
         voice_path = voice_agent.generate_voice(
             text=script.get("voiceover", payload.prompt),
             output_name=payload.output_name,
             language=payload.language,
-            output_dir=str(output_dir),
+            output_dir=str(project_dir),
         )
 
-        video_renderer = VideoRenderer(output_dir=str(output_dir))
+        # 5. Monter la vidéo
+        video_renderer = VideoRenderer(output_dir=str(project_dir))
         render_result = video_renderer.render(
             audio_path=voice_path,
             output_name=payload.output_name,
             duration=payload.duration,
-            image_sequence=[],
+            image_sequence=image_paths,
         )
 
+        # 6. Retourner le résultat final
         return VideoGenerationResponse(
             title=script.get("title", "Vidéo IA"),
             summary=script.get("summary", payload.prompt),
-            script_path=str(output_dir / f"{payload.output_name}_script.json"),
+            script_path=str(project_dir / f"{payload.output_name}_script.json"),
             voice_path=voice_path,
             video_path=render_result.get("output_path"),
             storyboard=storyboard.get("scenes", []),
