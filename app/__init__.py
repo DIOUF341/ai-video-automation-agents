@@ -1,1 +1,1 @@
-__all__ = ["settings"]
+"""VideoAgent Studio API."""
